@@ -136,6 +136,15 @@ nav button[aria-current=true]{color:var(--rose)}
 .note{font-size:12px;color:var(--muted);text-align:center}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .backup{display:flex;flex-direction:column;gap:8px}
+.llist{display:flex;flex-direction:column}
+.lrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.llist .lrow:first-child{border-top:0;padding-top:0}
+.lrow small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.lrow b{font-size:17px;white-space:nowrap}
+.lrow b.neg{color:var(--over)}
+.ltotal{border-top:1px solid var(--rose);font-weight:700}
+.ltotal b{font-size:20px;color:var(--rose)}
+.tag{margin-left:6px;font-size:11px;padding:1px 7px;border-radius:99px;background:var(--pink-soft);color:var(--rose)}
 .backup .two button{font-size:14px}
 </style>
 </head>
@@ -195,7 +204,40 @@ const WK="日一二三四五六";
 const dayLabel=s=>{const d=new Date(s+"T00:00");return `${d.getMonth()+1}/${d.getDate()}（${WK[d.getDay()]}）`};
 
 /* ---------- 資料層：存在這支手機（localStorage），可備份／還原 ---------- */
-const S={tab:"add",ym:ymOf(today()),entries:[],profile:{budget:0,noSpend:[],startDate:today()},
+/* ---------- 發薪週期 ----------
+   每月 10 號發薪，遇週六日（及 10/10 國慶日）提前到前一個上班日；
+   其他國定假日（春節、端午、中秋）可在「預算」視窗手動改發薪日。 */
+const PAY_DAY=10, RECORD_START="2026-11-01", BUDGET_START="2026-11-10";
+/* 第一期（10 月薪）只從 11/1 開始算，畫面顯示 11/1～11/9；這期只統計花費、不扣預算 */
+const vis=P=>P.start<RECORD_START&&P.end>=RECORD_START?{...P,start:RECORD_START}:P;
+const addDays=(s,n)=>{const d=new Date(s+"T00:00");d.setDate(d.getDate()+n);return dstr(d)};
+const isOff=d=>d.getDay()===0||d.getDay()===6||(d.getMonth()===9&&d.getDate()===10);
+function paydayOf(y,m){
+  const ov=(S.profile.paydays||{})[`${y}-${pad2(m)}`];if(ov)return ov;
+  const d=new Date(y,m-1,PAY_DAY);while(isOff(d))d.setDate(d.getDate()-1);return dstr(d);
+}
+function periodOf(s){
+  const [y,m]=s.split("-").map(Number),p=paydayOf(y,m);
+  if(s>=p){const n=new Date(y,m,1);return{start:p,end:addDays(paydayOf(n.getFullYear(),n.getMonth()+1),-1)}}
+  const v=new Date(y,m-2,1);return{start:paydayOf(v.getFullYear(),v.getMonth()+1),end:addDays(p,-1)};
+}
+const curPeriod=()=>periodOf(today());
+const md=s=>{const d=new Date(s+"T00:00");return `${d.getMonth()+1}/${d.getDate()}`};
+const periodName=P=>`${+P.start.slice(5,7)} 月薪`;
+/* 預算紀錄：每期套用「開始日之前最後一次設定」的金額，舊期不受之後改預算影響 */
+function budgetHist(){
+  const h=Array.isArray(S.profile.budgetHist)?S.profile.budgetHist.slice():[];
+  if(!h.length&&+S.profile.budget>0)h.push({from:BUDGET_START,amount:+S.profile.budget});
+  return h.sort((a,b)=>a.from.localeCompare(b.from));
+}
+function budgetFor(start){
+  const P=periodOf(start);if(P.end<BUDGET_START)return 0;
+  const eff=P.start<BUDGET_START?BUDGET_START:P.start;let v=0;
+  for(const x of budgetHist())if(x.from<=eff)v=x.amount;return v;
+}
+const inP=(e,P)=>e.date>=P.start&&e.date<=P.end;
+
+const S={tab:"add",pk:"",entries:[],all:[],profile:{budget:0,noSpend:[],startDate:today()},
   draft:{amt:"",cat:"餐飲",pay:"信用卡",date:today(),note:""},loading:true};
 let store=null;
 const local={
@@ -205,14 +247,14 @@ const local={
 function localStore(){
   let all=local.get("entries",[]);
   return{
-    watchMonth(ym){S.entries=all.filter(e=>e.ym===ym);S.loading=false;render()},
-    async add(e){e.id="l"+Date.now()+Math.random().toString(36).slice(2,6);all.push(e);local.set("entries",all);this.watchMonth(S.ym)},
-    async save(id,e){all=all.map(x=>x.id===id?{...e,id}:x);local.set("entries",all);this.watchMonth(S.ym)},
-    async del(id){all=all.filter(x=>x.id!==id);local.set("entries",all);this.watchMonth(S.ym)},
+    refresh(){if(!S.pk)S.pk=curPeriod().start;const P=periodOf(S.pk);S.pk=P.start;S.all=all;S.entries=all.filter(e=>inP(e,P));S.loading=false;render()},
+    async add(e){e.id="l"+Date.now()+Math.random().toString(36).slice(2,6);all.push(e);local.set("entries",all);this.refresh()},
+    async save(id,e){all=all.map(x=>x.id===id?{...e,id}:x);local.set("entries",all);this.refresh()},
+    async del(id){all=all.filter(x=>x.id!==id);local.set("entries",all);this.refresh()},
     async setProfile(p){S.profile=p;local.set("profile",p);render()},
     dump(){return{app:"et-wallet",version:1,exportedAt:new Date().toISOString(),profile:S.profile,entries:all}},
-    restore(data){all=data.entries;local.set("entries",all);S.profile={budget:0,noSpend:[],startDate:today(),...data.profile};local.set("profile",S.profile);this.watchMonth(S.ym)},
-    init(){const p=local.get("profile",null);if(p)S.profile=p;else local.set("profile",S.profile);this.watchMonth(S.ym)}
+    restore(data){all=data.entries;local.set("entries",all);S.profile={budget:0,noSpend:[],startDate:today(),...data.profile};local.set("profile",S.profile);this.refresh()},
+    init(){const p=local.get("profile",null);if(p)S.profile=p;else local.set("profile",S.profile);this.refresh()}
   };
 }
 /* 請瀏覽器把資料標記為「持續保存」，降低被系統自動清除的機率 */
@@ -222,10 +264,10 @@ function boot(){store=localStore();store.init()}
 /* ---------- 計算 ---------- */
 const sum=a=>a.reduce((t,e)=>t+(+e.amount||0),0);
 function missingDays(){
-  const t=new Date(today()+"T00:00"),out=[],start=S.profile.startDate||today();
-  const have=new Set(S.entries.map(e=>e.date));const no=new Set(S.profile.noSpend||[]);
+  const t=new Date(today()+"T00:00"),out=[],ps=S.profile.startDate||today(),start=ps>RECORD_START?ps:RECORD_START;
+  const have=new Set(S.all.map(e=>e.date));const no=new Set(S.profile.noSpend||[]);
   for(let i=1;i<=7;i++){const d=new Date(t);d.setDate(t.getDate()-i);const s=dstr(d);
-    if(ymOf(s)!==ymOf(today())||s<start)break;
+    if(s<start)break;
     if(!have.has(s)&&!no.has(s))out.push(s);}
   return out.reverse();
 }
@@ -236,20 +278,25 @@ function render(){
   ({add:renderAdd,list:renderList,stats:renderStats})[S.tab]();
 }
 function budgetCard(){
-  const spent=sum(S.entries.filter(e=>e.ym===ymOf(today())));
-  const b=+S.profile.budget||0;
-  const todaySpent=sum(S.entries.filter(e=>e.date===today()));
-  if(!b) return `<button class="card budget" id="budgetBtn"><span class="lbl">本月已花</span><span class="big num">$${fmt(spent)}</span><span class="row"><span>還沒設定預算</span><span style="color:var(--rose)">點這裡設定 ›</span></span></button>`;
+  const P=curPeriod(),inNow=S.all.filter(e=>inP(e,P));
+  const spent=sum(inNow),b=budgetFor(P.start),todaySpent=sum(S.all.filter(e=>e.date===today()));
+  const nextPay=addDays(P.end,1),days=Math.round((new Date(nextPay)-new Date(today()))/864e5);
+  const range=`${md(vis(P).start)}～${md(P.end)}`;
+  if(!b){
+    const pre=P.end<BUDGET_START;
+    return `<button class="card budget" id="budgetBtn"><span class="lbl">這期已花（${range}）</span><span class="big num">$${fmt(spent)}</span>
+      <span class="row"><span>${pre?`這期只統計花費，預算從 ${md(BUDGET_START)} 開始扣`:"還沒設定預算"}</span><span style="color:var(--rose)">${pre&&budgetHist().length?"查看預算 ›":"點這裡設定 ›"}</span></span></button>`;
+  }
   const left=b-spent,pct=Math.min(100,spent/b*100),over=left<0;
   return `<button class="card budget" id="budgetBtn">
-    <span class="lbl">${over?"本月已超支":"本月預算剩餘"}</span>
+    <span class="lbl">${over?"這期已超支":"這期預算剩餘"}（${range}）</span>
     <span class="big num ${over?"over":""}">$${fmt(Math.abs(left))}</span>
     <span class="bar"><i class="${over?"over":""}" style="width:${pct}%"></i></span>
-    <span class="row"><span>今日 <span class="num">$${fmt(todaySpent)}</span></span><span>已花 <span class="num">$${fmt(spent)}</span> / <span class="num">$${fmt(b)}</span></span></span>
+    <span class="row"><span>今日 <span class="num">$${fmt(todaySpent)}</span> · 距發薪 ${days} 天</span><span>已花 <span class="num">$${fmt(spent)}</span> / <span class="num">$${fmt(b)}</span></span></span>
   </button>`;
 }
 function renderAdd(){
-  if(S.ym!==ymOf(today())){S.ym=ymOf(today());store.watchMonth(S.ym);return}
+  if(store&&S.pk!==curPeriod().start){S.pk=curPeriod().start;store.refresh();return}
   const d=S.draft,miss=missingDays();
   if(!cats().some(x=>x[0]===d.cat))d.cat=cats()[0][0];
   $("#view").innerHTML=`<div class="stack">
@@ -269,43 +316,62 @@ function renderAdd(){
     </div>
   </div>`;
 }
-function monthBar(){
-  const [y,m]=S.ym.split("-").map(Number);
-  return `<div class="month"><button data-mon="-1" aria-label="上個月">‹</button><b>${y} 年 ${m} 月</b><button data-mon="1" aria-label="下個月" ${S.ym>=ymOf(today())?"disabled style='opacity:.3'":""}>›</button></div>`;
+function periodBar(){
+  const P=periodOf(S.pk),isCur=P.start>=curPeriod().start;
+  return `<div class="month"><button data-mon="-1" aria-label="上一期">‹</button><div style="text-align:center"><b>${periodName(P)}</b><div style="font-size:12px;color:var(--muted)">${md(vis(P).start)}～${md(P.end)}</div></div><button data-mon="1" aria-label="下一期" ${isCur?"disabled style='opacity:.3'":""}>›</button></div>`;
 }
 function renderList(){
   const by={};S.entries.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.ts-a.ts).forEach(e=>(by[e.date]=by[e.date]||[]).push(e));
   const days=Object.keys(by);
-  $("#view").innerHTML=`<div class="stack">${monthBar()}
+  $("#view").innerHTML=`<div class="stack">${periodBar()}
     ${S.loading?`<div class="empty">讀取中…</div>`:days.length?days.map(dy=>`<div class="day"><h3><span>${dayLabel(dy)}</span><span class="num">$${fmt(sum(by[dy]))}</span></h3>
       <div class="list">${by[dy].map(e=>`<button class="item" data-edit="${e.id}"><i style="background:${catColor(e.cat)}"></i><span class="t"><div>${esc(e.cat)}</div><small>${esc(e.pay)}${e.note?" · "+esc(e.note):""}</small></span><b class="num">$${fmt(e.amount)}</b></button>`).join("")}</div></div>`).join("")
-    :`<div class="empty">這個月還沒有紀錄<br>到「記帳」輸入金額、點分類就能記下第一筆</div>`}
+    :`<div class="empty">這期還沒有紀錄<br>到「記帳」輸入金額、點分類就能記下第一筆</div>`}
+  </div>`;
+}
+/* 每期剩餘預算：已結束的每一期列出「預算−花費」，加總成合計 */
+function leftoverCard(){
+  const cur=curPeriod(),rows=[];
+  let P=periodOf(BUDGET_START);
+  while(P.start<=cur.start){
+    const b=budgetFor(P.start),spent=sum(S.all.filter(e=>inP(e,P)));
+    rows.push({P,b,spent,left:b-spent,done:P.end<today()});
+    P=periodOf(addDays(P.end,1));
+  }
+  const done=rows.filter(r=>r.done&&r.b),total=done.reduce((t,r)=>t+r.left,0);
+  const line=r=>`<div class="lrow"><div><div>${periodName(r.P)}${r.done?"":`<span class="tag">進行中</span>`}</div><small>${md(vis(r.P).start)}～${md(r.P.end)} · 預算 $${fmt(r.b)} · 花 $${fmt(r.spent)}</small></div><b class="num ${r.left<0?"neg":""}">${r.left<0?"−":""}$${fmt(Math.abs(r.left))}</b></div>`;
+  const shown=rows.filter(r=>r.b).reverse();
+  return `<div class="card stack"><div style="font-size:13px;color:var(--muted)">每期剩餘預算</div>
+    ${shown.length?`<div class="llist">${shown.map(line).join("")}</div>
+      <div class="lrow ltotal"><div>合計（已結束 ${done.length} 期）</div><b class="num ${total<0?"neg":""}">${total<0?"−":""}$${fmt(Math.abs(total))}</b></div>`
+    :`<div class="note" style="text-align:left">設定預算後，從 ${md(BUDGET_START)} 發薪日開始，每期結束會在這裡列出剩下多少錢和合計。</div>`}
   </div>`;
 }
 function renderStats(){
-  const tot=sum(S.entries),b=+S.profile.budget||0;
+  const P=periodOf(S.pk),tot=sum(S.entries),b=budgetFor(P.start);
   const names=[...new Set([...cats().map(x=>x[0]),...S.entries.map(e=>e.cat)])];
   const rows=names.map(c=>[c,sum(S.entries.filter(e=>e.cat===c))]).filter(r=>r[1]>0).sort((a,b)=>b[1]-a[1]);
   const max=rows.length?rows[0][1]:1;
-  const [y,m]=S.ym.split("-").map(Number);const nd=new Date(y,m,0).getDate();
-  const daily=Array.from({length:nd},(_,i)=>sum(S.entries.filter(e=>e.date===`${S.ym}-${pad2(i+1)}`)));
+  const dates=[];for(let d=vis(P).start;d<=P.end;d=addDays(d,1))dates.push(d);const nd=dates.length;
+  const daily=dates.map(d=>sum(S.entries.filter(e=>e.date===d)));
   const dmax=Math.max(1,...daily),W=320,H=110,bw=W/nd;
   const svg=`<svg viewBox="0 0 ${W} ${H+18}" width="100%" role="img" aria-label="每日消費長條圖">
     ${daily.map((v,i)=>{const h=v/dmax*H;return `<rect x="${i*bw+1}" y="${H-h}" width="${Math.max(1,bw-2)}" height="${h}" rx="2" fill="${v>0?"#E3A3AD":"none"}"/>`}).join("")}
     <line x1="0" y1="${H}" x2="${W}" y2="${H}" stroke="#363035"/>
-    ${[1,10,20,nd].map(d=>`<text x="${(d-.5)*bw}" y="${H+13}" text-anchor="middle">${d}</text>`).join("")}
+    ${[0,Math.floor(nd/3),Math.floor(nd*2/3),nd-1].map(i=>`<text x="${Math.min(W-12,Math.max(12,(i+.5)*bw))}" y="${H+13}" text-anchor="middle">${md(dates[i])}</text>`).join("")}
   </svg>`;
-  $("#view").innerHTML=`<div class="stack">${monthBar()}
+  $("#view").innerHTML=`<div class="stack">${periodBar()}
     <div class="card stack">
-      <div class="total"><div><div style="font-size:13px;color:var(--muted)">本月總消費</div><b class="num">$${fmt(tot)}</b></div>
+      <div class="total"><div><div style="font-size:13px;color:var(--muted)">這期總消費</div><b class="num">$${fmt(tot)}</b></div>
       ${b?`<div style="text-align:right;font-size:13px;color:${tot>b?"var(--over)":"var(--muted)"}">預算 $${fmt(b)}<br>${tot>b?"超支 $"+fmt(tot-b):"已用 "+Math.round(tot/b*100)+"%"}</div>`:""}</div>
       ${b?`<div class="bar"><i class="${tot>b?"over":""}" style="width:${Math.min(100,tot/b*100)}%"></i></div>`:""}
     </div>
     <div class="card stack"><div style="font-size:13px;color:var(--muted)">分類</div>
-      ${rows.length?rows.map(([c,v])=>`<div class="crow"><span class="cn">${esc(c)}</span><span class="bar"><i style="width:${v/max*100}%;background:${catColor(c)}"></i></span><span class="num">$${fmt(v)}<small>${Math.round(v/tot*100)}%</small></span></div>`).join(""):`<div class="empty" style="padding:16px">這個月還沒有紀錄</div>`}
+      ${rows.length?rows.map(([c,v])=>`<div class="crow"><span class="cn">${esc(c)}</span><span class="bar"><i style="width:${v/max*100}%;background:${catColor(c)}"></i></span><span class="num">$${fmt(v)}<small>${Math.round(v/tot*100)}%</small></span></div>`).join(""):`<div class="empty" style="padding:16px">這期還沒有紀錄</div>`}
     </div>
+    ${leftoverCard()}
     <div class="card stack"><div style="font-size:13px;color:var(--muted)">每日消費</div>${svg}</div>
-    <button class="ghost" id="exportBtn">匯出本月 Excel（CSV）</button>
+    <button class="ghost" id="exportBtn">匯出這期 Excel（CSV）</button>
     <div class="card backup">
       <div style="font-size:13px;color:var(--muted)">資料備份</div>
       <div class="note" style="text-align:left">${(()=>{const lb=local.get("lastBackup","");if(!lb)return "還沒備份過。資料只存在這支手機，建議每月備份一次。";const days=Math.round((new Date(today())-new Date(lb))/864e5);return `上次備份：${lb}${days>=30?`（已經 ${days} 天，該備份囉）`:""}`})()}</div>
@@ -321,12 +387,27 @@ function sheet(html,bind){
   m.addEventListener("click",e=>{if(e.target===m)m.remove()});document.body.appendChild(m);bind(m,()=>m.remove());
 }
 function budgetSheet(){
-  sheet(`<h2>每月預算</h2><label class="pill"><span>$</span><input id="bIn" class="big-in" inputmode="numeric" value="${S.profile.budget||""}" placeholder="例如 15000"></label>
-    <div class="note">每記一筆，會從當月預算扣掉</div>
+  const P=curPeriod(),from=P.start>BUDGET_START?P.start:BUDGET_START;
+  const nk=(()=>{const [y,m]=P.start.split("-").map(Number),n=new Date(y,m,1);return `${n.getFullYear()}-${pad2(n.getMonth()+1)}`})();
+  const nextPay=addDays(P.end,1),hasOv=!!(S.profile.paydays||{})[nk];
+  sheet(`<h2>每期預算</h2>
+    <label class="pill"><span>$</span><input id="bIn" class="big-in" inputmode="numeric" value="${budgetFor(from)||S.profile.budget||""}" placeholder="例如 15000"></label>
+    <div class="note">預算從發薪日算到下次發薪前一天，每記一筆就從這期扣掉。<br>${P.start<BUDGET_START?`${md(vis(P).start)}～${md(P.end)} 只統計花費，預算從 ${md(BUDGET_START)} 發薪日開始扣`:`修改後從這期（${md(P.start)} 起）開始套用，之前的期數不變`}</div>
+    <div style="font-size:13px;color:var(--muted)">下次發薪日</div>
+    <label class="pill"><input type="date" id="payIn" value="${nextPay}" aria-label="下次發薪日"></label>
+    <div class="note">遇週六日會自動提前到週五；遇春節等國定假日請在這裡手動改${hasOv?`　<button class="chip" data-auto>恢復自動</button>`:""}</div>
     <div class="two"><button class="ghost" data-x>取消</button><button class="save" data-ok>儲存</button></div>`,(m,close)=>{
     m.querySelector("[data-x]").onclick=close;
-    m.querySelector("[data-ok]").onclick=async()=>{const v=parseInt(m.querySelector("#bIn").value.replace(/\D/g,""))||0;close();await store.setProfile({...S.profile,budget:v});toast("預算已更新")};
-    m.querySelector("#bIn").focus();
+    const auto=m.querySelector("[data-auto]");
+    if(auto)auto.onclick=async()=>{const pd={...(S.profile.paydays||{})};delete pd[nk];close();await store.setProfile({...S.profile,paydays:pd});store.refresh();toast("已恢復自動計算發薪日")};
+    m.querySelector("[data-ok]").onclick=async()=>{
+      const v=parseInt(m.querySelector("#bIn").value.replace(/\D/g,""))||0;
+      const pay=m.querySelector("#payIn").value;
+      if(pay&&pay<=today()&&pay!==nextPay)return toast("下次發薪日要選今天以後的日期");
+      const hist=budgetHist().filter(x=>x.from!==from);if(v)hist.push({from,amount:v});
+      const pd={...(S.profile.paydays||{})};if(pay&&pay!==nextPay)pd[nk]=pay;
+      close();await store.setProfile({...S.profile,budget:v,budgetHist:hist,paydays:pd});store.refresh();toast("已儲存");
+    };
   });
 }
 function catSheet(){
@@ -441,14 +522,14 @@ document.addEventListener("click",async ev=>{
   const t=ev.target.closest("button");if(!t||t.closest(".sheet"))return;
   const d=S.draft;
   if(!store&&(t.dataset.mon||t.dataset.miss||t.dataset.edit||t.id==="saveBtn"||t.id==="budgetBtn"))return toast("讀取中，請稍候");
-  if(t.dataset.tab){S.tab=t.dataset.tab;if(S.tab==="add"&&S.ym!==ymOf(today())){S.ym=ymOf(today());store.watchMonth(S.ym)}render();window.scrollTo(0,0);return}
+  if(t.dataset.tab){S.tab=t.dataset.tab;if(S.tab==="add"&&S.pk!==curPeriod().start){S.pk=curPeriod().start;store.refresh()}else render();window.scrollTo(0,0);return}
   if(t.dataset.k){const k=t.dataset.k;if(k==="⌫")d.amt=d.amt.slice(0,-1);else if((d.amt+k).replace(/^0+/,"").length<=7)d.amt=(d.amt+k).replace(/^0+/,"");
     $("#amt").textContent=d.amt?fmt(+d.amt):"0";$("#amt").classList.toggle("ph",!d.amt);$("#saveBtn").disabled=!(+d.amt>0);return}
   if(t.dataset.cat){d.cat=t.dataset.cat;document.querySelectorAll("[data-cat]").forEach(b=>b.setAttribute("aria-pressed",b===t));return}
   if(t.dataset.pay){d.pay=t.dataset.pay;document.querySelectorAll("[data-pay]").forEach(b=>b.setAttribute("aria-pressed",b===t));return}
   if(t.dataset.miss)return missSheet(t.dataset.miss);
   if(t.dataset.edit)return editSheet(t.dataset.edit);
-  if(t.dataset.mon){const [y,m]=S.ym.split("-").map(Number);const nd=new Date(y,m-1+(+t.dataset.mon),1);const ym=`${nd.getFullYear()}-${pad2(nd.getMonth()+1)}`;if(ym>ymOf(today()))return;S.ym=ym;S.loading=true;render();store.watchMonth(ym);return}
+  if(t.dataset.mon){const P=periodOf(S.pk);const np=+t.dataset.mon<0?periodOf(addDays(P.start,-1)):periodOf(addDays(P.end,1));if(np.start>curPeriod().start)return;S.pk=np.start;store.refresh();return}
   if(t.id==="budgetBtn")return budgetSheet();
   if(t.id==="catBtn")return catSheet();
   if(t.id==="saveBtn"){
@@ -467,10 +548,10 @@ document.addEventListener("change",ev=>{
 document.addEventListener("input",ev=>{if(ev.target.id==="dNote")S.draft.note=ev.target.value});
 
 async function exportCsv(){
-  if(!S.entries.length)return toast("這個月沒有資料可匯出");
+  if(!S.entries.length)return toast("這期沒有資料可匯出");
   const rows=[["日期","分類","付款方式","金額","備註"],...S.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.date,e.cat,e.pay,e.amount,e.note||""])];
   const csv="﻿"+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
-  saveFile(`記帳_${S.ym}.csv`,csv,"text/csv");
+  const P=periodOf(S.pk);saveFile(`記帳_${P.start}_${P.end}.csv`,csv,"text/csv");
 }
 function saveFile(name,text,type){
   const url=URL.createObjectURL(new Blob([text],{type:type+";charset=utf-8"}));
