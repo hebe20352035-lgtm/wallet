@@ -99,13 +99,19 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-height:20px}
 .crow .cn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cat.add{border-style:dashed;color:var(--muted)}
 .cat{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.clist{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.clist{position:relative;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .clist div{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--line)}
 .clist div:first-child{border-top:0}
 .clist i{width:12px;height:12px;border-radius:50%;flex:none}
 .clist span{flex:1;min-width:0}
-.clist button{font-size:13px;color:var(--muted);padding:4px 8px;border-radius:8px}
-.clist button.sure{color:var(--over)}
+.clist .del{font-size:13px;color:var(--muted);padding:4px 8px;border-radius:8px}
+.clist .del.sure{color:var(--over)}
+.clist .crow2{background:var(--surface);position:relative}
+.clist .crow2.dragging{z-index:2;background:var(--pink-soft);box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.clist .handle{touch-action:none;width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:grab;margin-left:-6px}
+.clist .handle svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;fill:none}
+.clist .dot{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.clist .dot i{width:16px;height:16px}
 .sw{display:flex;flex-wrap:wrap;gap:10px}
 .sw button{width:30px;height:30px;border-radius:50%;border:2px solid transparent}
 .sw button[aria-pressed=true]{border-color:var(--bg);box-shadow:0 0 0 2px var(--ink)}
@@ -168,12 +174,14 @@ nav button[aria-current=true]{color:var(--rose)}
 </div></nav>
 
 <script>
-const DEFAULT_CATS=[["餐飲","var(--c1)"],["飲料","var(--c5)"],["交通費","var(--c4)"],["日用品","var(--c3)"],["娛樂","var(--c2)"],["其他","var(--c6)"]];
+const DEFAULT_CATS=[["餐飲","#F4978E"],["飲料","#C79BF2"],["交通費","#7FB7F5"],["日用品","#7DD3A8"],["娛樂","#F6C85F"],["其他","#B5ADA8"]];
 const SWATCH=["#F4978E","#F28DB2","#C79BF2","#7FB7F5","#5CC8C8","#7DD3A8","#B8D86B","#F6C85F","#F5A962","#B5ADA8"];
 /* 分類清單存在 profile.cats，沒有自訂過就用預設 */
 /* 舊版淡色色票自動換成新的對應顏色 */
 const OLD_SWATCH=["#F2C6C2","#EBC9DD","#D8C3F0","#D3D3E8","#B8D8E8","#C9DCCF","#A9D3C6","#F5E3A8","#E9D3B8","#CFC6C0"];
-const cats=()=>Array.isArray(S.profile.cats)&&S.profile.cats.length?S.profile.cats.map(([n,c])=>[n,OLD_SWATCH.includes(c)?SWATCH[OLD_SWATCH.indexOf(c)]:c]):DEFAULT_CATS;
+const VAR_HEX={"var(--c1)":"#F4978E","var(--c2)":"#F6C85F","var(--c3)":"#7DD3A8","var(--c4)":"#7FB7F5","var(--c5)":"#C79BF2","var(--c6)":"#B5ADA8"};
+const fixColor=c=>VAR_HEX[c]||(OLD_SWATCH.includes(c)?SWATCH[OLD_SWATCH.indexOf(c)]:c);
+const cats=()=>Array.isArray(S.profile.cats)&&S.profile.cats.length?S.profile.cats.map(([n,c])=>[n,fixColor(c)]):DEFAULT_CATS;
 const PAYS=["信用卡","現金","其他"];
 const catColor=c=>(cats().find(x=>x[0]===c)||[c,"var(--c6)"])[1];
 const $=s=>document.querySelector(s);
@@ -322,20 +330,36 @@ function budgetSheet(){
   });
 }
 function catSheet(){
-  let color=SWATCH.find(c=>!cats().some(x=>x[1]===c))||SWATCH[0];
+  const used=c=>cats().some(x=>x[1]===c);
+  let color=SWATCH.find(c=>!used(c))||SWATCH[0];
   sheet(`<h2>分類設定</h2>
-    <div class="clist">${cats().map(([c,v],i)=>`<div><i style="background:${v}"></i><span>${esc(c)}</span>${cats().length>1?`<button data-delcat="${i}">刪除</button>`:""}</div>`).join("")}</div>
+    <div class="note" style="text-align:left">按住左邊 ≡ 上下拖曳可以排序，點色點可以換顏色</div>
+    <div class="clist" id="clist">${cats().map(([c,v],i)=>`<div class="crow2" data-i="${i}">
+      <button class="handle" aria-label="拖曳排序"><svg viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h12"/></svg></button>
+      <button class="dot" aria-label="換顏色"><i style="background:${v}"></i></button>
+      <span>${esc(c)}</span>
+      ${cats().length>1?`<button class="del">刪除</button>`:""}</div>`).join("")}</div>
     <div style="font-size:13px;color:var(--muted)">新增分類</div>
     <label class="pill"><input id="catName" placeholder="分類名稱，例如：寵物" maxlength="6"></label>
     <div class="sw">${SWATCH.map(c=>`<button data-sw="${c}" style="background:${c}" aria-pressed="${c===color}" aria-label="顏色"></button>`).join("")}</div>
     <div class="note">刪除分類不會刪掉以前的紀錄，舊紀錄會保留原本的分類名稱</div>
     <div class="two"><button class="ghost" data-x>關閉</button><button class="save" data-ok>新增</button></div>`,(m,close)=>{
+    const list=m.querySelector("#clist");
     m.querySelector("[data-x]").onclick=close;
     m.querySelectorAll("[data-sw]").forEach(b=>b.onclick=()=>{color=b.dataset.sw;m.querySelectorAll("[data-sw]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
-    m.querySelectorAll("[data-delcat]").forEach(b=>b.onclick=async()=>{
-      if(!b.classList.contains("sure")){b.classList.add("sure");b.textContent="確定刪除？";return}
-      const list=cats().filter((_,i)=>i!==+b.dataset.delcat);close();
-      await store.setProfile({...S.profile,cats:list});toast("已刪除分類");catSheet();
+    list.addEventListener("click",async ev=>{
+      const row=ev.target.closest(".crow2");if(!row)return;const i=+row.dataset.i;
+      const del=ev.target.closest(".del");
+      if(del){
+        if(!del.classList.contains("sure")){del.classList.add("sure");del.textContent="確定刪除？";return}
+        close();await store.setProfile({...S.profile,cats:cats().filter((_,k)=>k!==i)});toast("已刪除分類");catSheet();return;
+      }
+      if(ev.target.closest(".dot"))colorSheet(i,close);
+    });
+    enableDrag(list,async order=>{
+      const cur=cats();if(order.every((v,k)=>v===k))return;
+      await store.setProfile({...S.profile,cats:order.map(k=>cur[k])});
+      [...list.children].forEach((r,k)=>r.dataset.i=k);
     });
     m.querySelector("[data-ok]").onclick=async()=>{
       const name=m.querySelector("#catName").value.trim();
@@ -345,6 +369,44 @@ function catSheet(){
       S.draft.cat=name;render();toast(`已新增「${name}」`);
     };
   });
+}
+function colorSheet(i,closeParent){
+  const [name,cur]=cats()[i];
+  sheet(`<h2>「${esc(name)}」的顏色</h2>
+    <div class="sw">${SWATCH.map(c=>`<button data-sw="${c}" style="background:${c}" aria-pressed="${c===cur}" aria-label="顏色"></button>`).join("")}</div>
+    <button class="ghost" data-x>取消</button>`,(m,close)=>{
+    m.querySelector("[data-x]").onclick=close;
+    m.querySelectorAll("[data-sw]").forEach(b=>b.onclick=async()=>{
+      close();closeParent();
+      await store.setProfile({...S.profile,cats:cats().map((x,k)=>k===i?[x[0],b.dataset.sw]:x)});catSheet();
+    });
+  });
+}
+/* 拖曳排序：按住把手上下拖，放開後回傳新順序（舊的索引陣列） */
+function enableDrag(list,onDone){
+  let row=null,startY=0,pid=null;
+  list.addEventListener("pointerdown",e=>{
+    const h=e.target.closest(".handle");if(!h)return;
+    row=h.closest(".crow2");pid=e.pointerId;startY=e.clientY;
+    try{h.setPointerCapture(pid)}catch(_){}
+    row.classList.add("dragging");e.preventDefault();
+  });
+  list.addEventListener("pointermove",e=>{
+    if(!row||e.pointerId!==pid)return;
+    row.style.transform=`translateY(${e.clientY-startY}px)`;
+    const r=row.getBoundingClientRect(),mid=r.top+r.height/2;
+    const prev=row.previousElementSibling,next=row.nextElementSibling;
+    const half=el=>{const b=el.getBoundingClientRect();return b.top+b.height/2};
+    if(next&&mid>half(next)){const t0=row.offsetTop;list.insertBefore(next,row);startY+=row.offsetTop-t0}
+    else if(prev&&mid<half(prev)){const t0=row.offsetTop;list.insertBefore(row,prev);startY+=row.offsetTop-t0}
+    row.style.transform=`translateY(${e.clientY-startY}px)`;
+  });
+  const end=e=>{
+    if(!row||e.pointerId!==pid)return;
+    row.style.transform="";row.classList.remove("dragging");row=null;
+    onDone([...list.children].map(r=>+r.dataset.i));
+  };
+  list.addEventListener("pointerup",end);list.addEventListener("pointercancel",end);
 }
 function missSheet(s){
   sheet(`<h2>${dayLabel(s)}</h2><div class="two"><button class="ghost" data-no>這天沒花錢</button><button class="save" data-fill>補記這天</button></div>`,(m,close)=>{
