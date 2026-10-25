@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>et 的小錢包</title>
+<meta name="theme-color" content="#1B181A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="小錢包">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Nunito:wght@500;700;800&display=swap">
+<style>
+/* 版面：單欄手機 APP，上方預算卡、中間記帳、下方固定分頁列。刻意只用深色＋淡粉單一暗色主題。 */
+:root{
+  --bg:#1B181A; --surface:#252023; --pink:#E8B4BC; --pink-soft:#3A2B31; --rose:#E3A3AD;
+  --ink:#F3E9EA; --muted:#A3959A; --line:#363035; --over:#F08C8C;
+  --c1:#F2C6C2; --c2:#E9D3B8; --c3:#C9DCCF; --c4:#D3D3E8; --c5:#EBC9DD; --c6:#CFC6C0;
+  --f-num:"Nunito","Noto Sans TC",system-ui,sans-serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --r:18px; color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+img{max-width:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
+.app{max-width:720px;margin:0 auto;min-height:100%;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:calc(14px + env(safe-area-inset-top,0px)) calc(84px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:center;gap:10px}
+header h1{font-size:18px;font-weight:700;margin:0;letter-spacing:.04em}
+header .pig{margin-left:auto;flex:none}
+header .sub{font-size:13px;color:var(--muted)}
+header .sub:empty{display:none}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+/* 預算卡 */
+.budget{display:flex;flex-direction:column;gap:10px;text-align:left;width:100%}
+.budget .lbl{font-size:13px;color:var(--muted)}
+.budget .big{font-size:34px;font-weight:800;line-height:1}
+.budget .big.over{color:var(--over)}
+.bar{height:8px;border-radius:99px;background:var(--pink-soft);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--pink);border-radius:99px;transition:width .3s}
+.bar i.over{background:var(--over)}
+.budget .row{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+/* 補記提示 */
+.miss{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.chip{padding:5px 11px;border-radius:99px;background:var(--pink-soft);color:var(--rose);font-size:13px}
+/* 記帳 */
+.amount{display:flex;align-items:baseline;justify-content:flex-end;gap:6px;padding:4px 4px 0}
+.amount span{font-size:18px;color:var(--muted)}
+.amount b{font-family:var(--f-num);font-size:44px;font-weight:800;min-height:52px}
+.amount b.ph{color:var(--line)}
+.meta{display:flex;gap:8px}
+.meta label,.meta input{flex:1;min-width:0}
+.pill{display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:9px 12px;font-size:14px;color:var(--ink)}
+.pill input{border:0;background:transparent;font:inherit;color:inherit;width:100%;min-width:0}
+input[type=date]{-webkit-appearance:none;appearance:none;min-height:20px}
+.cats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.cat{display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 6px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-size:15px}
+.cat i{width:9px;height:9px;border-radius:50%}
+.cat[aria-pressed=true]{background:var(--pink-soft);border-color:var(--rose);color:var(--rose);font-weight:500}
+.seg{display:flex;background:var(--pink-soft);border-radius:12px;padding:3px}
+.seg button{flex:1;padding:7px;border-radius:10px;font-size:14px;color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--surface);color:var(--ink);font-weight:500}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pad button{padding:13px 0;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-family:var(--f-num);font-size:22px;font-weight:700}
+.pad button:active{background:var(--pink-soft)}
+.save{width:100%;padding:15px;border-radius:16px;background:var(--rose);color:var(--bg);font-size:17px;font-weight:700;letter-spacing:.1em}
+.save:disabled{background:var(--pink-soft);color:var(--muted)}
+@media (min-width:600px){.cats{grid-template-columns:repeat(6,1fr)}}
+/* 月份切換 */
+.month{display:flex;align-items:center;justify-content:space-between}
+.month button{width:38px;height:38px;border-radius:50%;font-size:18px;color:var(--rose)}
+.month b{font-size:17px}
+/* 明細 */
+.day{display:flex;flex-direction:column}
+.day h3{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:500;margin:0 4px 6px}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.item{display:flex;align-items:center;gap:12px;width:100%;padding:13px 14px;text-align:left;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item i{width:10px;height:10px;border-radius:50%;flex:none}
+.item .t{flex:1;min-width:0}
+.item .t div{font-size:15px}
+.item .t small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item b{font-size:17px}
+.empty{text-align:center;color:var(--muted);padding:36px 16px;font-size:14px;line-height:1.8}
+/* 統計 */
+.total{display:flex;justify-content:space-between;align-items:flex-end}
+.total b{font-size:30px;font-weight:800}
+.crow{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:10px;font-size:14px}
+.crow .bar{height:10px}
+.crow small{color:var(--muted);font-size:12px;margin-left:4px}
+.stack{display:flex;flex-direction:column;gap:12px}
+svg text{fill:var(--muted);font-family:var(--f-num);font-size:10px}
+.ghost{width:100%;padding:13px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--rose);font-size:15px}
+/* 分頁列 */
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);z-index:5}
+nav div{display:flex;width:100%;max-width:720px}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 0 10px;font-size:12px;color:var(--muted)}
+nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.6}
+nav button[aria-current=true]{color:var(--rose)}
+/* 底部彈窗 */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:720px;border-radius:22px 22px 0 0;padding:20px max(16px,env(safe-area-inset-left,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:12px;max-height:90%;overflow:auto}
+.sheet h2{margin:0;font-size:17px}
+.sheet .big-in{font-family:var(--f-num);font-size:30px;font-weight:800;text-align:right}
+.two{display:flex;gap:8px}.two>*{flex:1}
+.danger{color:var(--over)}
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 18px;border-radius:99px;font-size:14px;z-index:30;white-space:nowrap}
+.note{font-size:12px;color:var(--muted);text-align:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.backup{display:flex;flex-direction:column;gap:8px}
+.backup .two button{font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <header>
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <circle cx="17" cy="17" r="15" fill="#E8B4BC"/>
+      <circle cx="17" cy="17" r="11" fill="none" stroke="#F6DDE1" stroke-width="1.5"/>
+      <path d="M20.5 12.6c-.8-.9-2-1.4-3.5-1.4-2 0-3.4 1.1-3.4 2.6 0 3.6 7 2 7 5.7 0 1.6-1.5 2.7-3.6 2.7-1.6 0-2.9-.6-3.7-1.6M17 9.5v15" fill="none" stroke="#7A3F4A" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    <h1>et 的小錢包</h1>
+    <svg class="pig" width="52" height="40" viewBox="0 0 52 40" aria-hidden="true">
+      <circle cx="30" cy="5" r="4" fill="#F6E3B4" stroke="#E2C27E" stroke-width="1"/>
+      <path d="M16 13 l3-7 5 6z" fill="#D99BA5"/>
+      <ellipse cx="27" cy="24" rx="17" ry="12" fill="#E8B4BC"/>
+      <rect x="14" y="32" width="5" height="6" rx="2" fill="#D99BA5"/>
+      <rect x="33" y="32" width="5" height="6" rx="2" fill="#D99BA5"/>
+      <path d="M25 13.5h9" stroke="#7A3F4A" stroke-width="1.6" stroke-linecap="round"/>
+      <ellipse cx="10.5" cy="25" rx="4.2" ry="3.4" fill="#D99BA5"/>
+      <circle cx="9.3" cy="25" r=".8" fill="#7A3F4A"/><circle cx="11.8" cy="25" r=".8" fill="#7A3F4A"/>
+      <circle cx="18" cy="20.5" r="1.3" fill="#1B181A"/>
+      <ellipse cx="18.5" cy="26.5" rx="2" ry="1.1" fill="#F4CBD1"/>
+      <path d="M44 22c3-1 4 2 2 3" fill="none" stroke="#D99BA5" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <span class="sub" id="hdrSub"></span>
+  </header>
+  <main id="view"></main>
+</div>
+
+<nav><div>
+  <button data-tab="add" aria-current="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/></svg>記帳</button>
+  <button data-tab="list"><svg viewBox="0 0 24 24"><path d="M7 7h11M7 12h11M7 17h7" stroke-linecap="round"/><circle cx="4" cy="7" r=".6"/><circle cx="4" cy="12" r=".6"/><circle cx="4" cy="17" r=".6"/></svg>明細</button>
+  <button data-tab="stats"><svg viewBox="0 0 24 24"><path d="M5 19V11M10 19V6M15 19v-5M20 19V9" stroke-linecap="round"/></svg>統計</button>
+</div></nav>
+
+<script>
+const CATS=[["餐飲","--c1"],["飲料","--c5"],["交通費","--c4"],["日用品","--c3"],["娛樂","--c2"],["其他","--c6"]];
+const PAYS=["信用卡","現金","其他"];
+const catColor=c=>`var(${(CATS.find(x=>x[0]===c)||CATS[5])[1]})`;
+const $=s=>document.querySelector(s);
+const fmt=n=>Math.round(n).toLocaleString("zh-TW");
+const pad2=n=>String(n).padStart(2,"0");
+const dstr=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const today=()=>dstr(new Date());
+const ymOf=s=>s.slice(0,7);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const WK="日一二三四五六";
+const dayLabel=s=>{const d=new Date(s+"T00:00");return `${d.getMonth()+1}/${d.getDate()}（${WK[d.getDay()]}）`};
+
+/* ---------- 資料層：存在這支手機（localStorage），可備份／還原 ---------- */
+const S={tab:"add",ym:ymOf(today()),entries:[],profile:{budget:0,noSpend:[],startDate:today()},
+  draft:{amt:"",cat:"餐飲",pay:"信用卡",date:today(),note:""},loading:true};
+let store=null;
+const local={
+  get(k,d){try{const v=localStorage.getItem("wallet:"+k);return v?JSON.parse(v):d}catch(e){return d}},
+  set(k,v){try{localStorage.setItem("wallet:"+k,JSON.stringify(v))}catch(e){}}
+};
+function localStore(){
+  let all=local.get("entries",[]);
+  return{
+    watchMonth(ym){S.entries=all.filter(e=>e.ym===ym);S.loading=false;render()},
+    async add(e){e.id="l"+Date.now()+Math.random().toString(36).slice(2,6);all.push(e);local.set("entries",all);this.watchMonth(S.ym)},
+    async save(id,e){all=all.map(x=>x.id===id?{...e,id}:x);local.set("entries",all);this.watchMonth(S.ym)},
+    async del(id){all=all.filter(x=>x.id!==id);local.set("entries",all);this.watchMonth(S.ym)},
+    async setProfile(p){S.profile=p;local.set("profile",p);render()},
+    dump(){return{app:"et-wallet",version:1,exportedAt:new Date().toISOString(),profile:S.profile,entries:all}},
+    restore(data){all=data.entries;local.set("entries",all);S.profile={budget:0,noSpend:[],startDate:today(),...data.profile};local.set("profile",S.profile);this.watchMonth(S.ym)},
+    init(){const p=local.get("profile",null);if(p)S.profile=p;else local.set("profile",S.profile);this.watchMonth(S.ym)}
+  };
+}
+/* 請瀏覽器把資料標記為「持續保存」，降低被系統自動清除的機率 */
+try{navigator.storage?.persist?.()}catch(e){}
+function boot(){store=localStore();store.init()}
+
+/* ---------- 計算 ---------- */
+const sum=a=>a.reduce((t,e)=>t+(+e.amount||0),0);
+function missingDays(){
+  const t=new Date(today()+"T00:00"),out=[],start=S.profile.startDate||today();
+  const have=new Set(S.entries.map(e=>e.date));const no=new Set(S.profile.noSpend||[]);
+  for(let i=1;i<=7;i++){const d=new Date(t);d.setDate(t.getDate()-i);const s=dstr(d);
+    if(ymOf(s)!==ymOf(today())||s<start)break;
+    if(!have.has(s)&&!no.has(s))out.push(s);}
+  return out.reverse();
+}
+
+/* ---------- 畫面 ---------- */
+function render(){
+  document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===S.tab));
+  ({add:renderAdd,list:renderList,stats:renderStats})[S.tab]();
+}
+function budgetCard(){
+  const spent=sum(S.entries.filter(e=>e.ym===ymOf(today())));
+  const b=+S.profile.budget||0;
+  const todaySpent=sum(S.entries.filter(e=>e.date===today()));
+  if(!b) return `<button class="card budget" id="budgetBtn"><span class="lbl">本月已花</span><span class="big num">$${fmt(spent)}</span><span class="row"><span>還沒設定預算</span><span style="color:var(--rose)">點這裡設定 ›</span></span></button>`;
+  const left=b-spent,pct=Math.min(100,spent/b*100),over=left<0;
+  return `<button class="card budget" id="budgetBtn">
+    <span class="lbl">${over?"本月已超支":"本月預算剩餘"}</span>
+    <span class="big num ${over?"over":""}">$${fmt(Math.abs(left))}</span>
+    <span class="bar"><i class="${over?"over":""}" style="width:${pct}%"></i></span>
+    <span class="row"><span>今日 <span class="num">$${fmt(todaySpent)}</span></span><span>已花 <span class="num">$${fmt(spent)}</span> / <span class="num">$${fmt(b)}</span></span></span>
+  </button>`;
+}
+function renderAdd(){
+  if(S.ym!==ymOf(today())){S.ym=ymOf(today());store.watchMonth(S.ym);return}
+  const d=S.draft,miss=missingDays();
+  $("#view").innerHTML=`<div class="stack">
+    ${budgetCard()}
+    ${miss.length?`<div class="miss"><span>這幾天還沒記：</span>${miss.map(s=>`<button class="chip" data-miss="${s}">${dayLabel(s).replace(/（.）/,"")}</button>`).join("")}</div>`:""}
+    <div class="card stack">
+      <div class="amount"><span>$</span><b class="${d.amt?"":"ph"}" id="amt">${d.amt?fmt(+d.amt):"0"}</b></div>
+      <div class="cats">${CATS.map(([c,v])=>`<button class="cat" data-cat="${c}" aria-pressed="${d.cat===c}"><i style="background:var(${v})"></i>${c}</button>`).join("")}</div>
+      <div class="seg">${PAYS.map(p=>`<button data-pay="${p}" aria-pressed="${d.pay===p}">${p}</button>`).join("")}</div>
+      <div class="meta">
+        <label class="pill"><input type="date" id="dDate" value="${d.date}" max="${today()}" aria-label="日期"></label>
+        <label class="pill"><input id="dNote" placeholder="備註（可不填）" value="${esc(d.note)}" maxlength="40"></label>
+      </div>
+      ${d.date!==today()?`<div class="note">正在補記 ${dayLabel(d.date)} 的消費</div>`:""}
+      <div class="pad">${["1","2","3","4","5","6","7","8","9","00","0","⌫"].map(k=>`<button data-k="${k}" aria-label="${k==="⌫"?"刪除":k}">${k}</button>`).join("")}</div>
+      <button class="save" id="saveBtn" ${+d.amt>0?"":"disabled"}>記一筆</button>
+    </div>
+  </div>`;
+}
+function monthBar(){
+  const [y,m]=S.ym.split("-").map(Number);
+  return `<div class="month"><button data-mon="-1" aria-label="上個月">‹</button><b>${y} 年 ${m} 月</b><button data-mon="1" aria-label="下個月" ${S.ym>=ymOf(today())?"disabled style='opacity:.3'":""}>›</button></div>`;
+}
+function renderList(){
+  const by={};S.entries.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.ts-a.ts).forEach(e=>(by[e.date]=by[e.date]||[]).push(e));
+  const days=Object.keys(by);
+  $("#view").innerHTML=`<div class="stack">${monthBar()}
+    ${S.loading?`<div class="empty">讀取中…</div>`:days.length?days.map(dy=>`<div class="day"><h3><span>${dayLabel(dy)}</span><span class="num">$${fmt(sum(by[dy]))}</span></h3>
+      <div class="list">${by[dy].map(e=>`<button class="item" data-edit="${e.id}"><i style="background:${catColor(e.cat)}"></i><span class="t"><div>${esc(e.cat)}</div><small>${esc(e.pay)}${e.note?" · "+esc(e.note):""}</small></span><b class="num">$${fmt(e.amount)}</b></button>`).join("")}</div></div>`).join("")
+    :`<div class="empty">這個月還沒有紀錄<br>到「記帳」輸入金額、點分類就能記下第一筆</div>`}
+  </div>`;
+}
+function renderStats(){
+  const tot=sum(S.entries),b=+S.profile.budget||0;
+  const rows=CATS.map(([c])=>[c,sum(S.entries.filter(e=>e.cat===c))]).filter(r=>r[1]>0).sort((a,b)=>b[1]-a[1]);
+  const max=rows.length?rows[0][1]:1;
+  const [y,m]=S.ym.split("-").map(Number);const nd=new Date(y,m,0).getDate();
+  const daily=Array.from({length:nd},(_,i)=>sum(S.entries.filter(e=>e.date===`${S.ym}-${pad2(i+1)}`)));
+  const dmax=Math.max(1,...daily),W=320,H=110,bw=W/nd;
+  const svg=`<svg viewBox="0 0 ${W} ${H+18}" width="100%" role="img" aria-label="每日消費長條圖">
+    ${daily.map((v,i)=>{const h=v/dmax*H;return `<rect x="${i*bw+1}" y="${H-h}" width="${Math.max(1,bw-2)}" height="${h}" rx="2" fill="${v>0?"#E3A3AD":"none"}"/>`}).join("")}
+    <line x1="0" y1="${H}" x2="${W}" y2="${H}" stroke="#363035"/>
+    ${[1,10,20,nd].map(d=>`<text x="${(d-.5)*bw}" y="${H+13}" text-anchor="middle">${d}</text>`).join("")}
+  </svg>`;
+  $("#view").innerHTML=`<div class="stack">${monthBar()}
+    <div class="card stack">
+      <div class="total"><div><div style="font-size:13px;color:var(--muted)">本月總消費</div><b class="num">$${fmt(tot)}</b></div>
+      ${b?`<div style="text-align:right;font-size:13px;color:${tot>b?"var(--over)":"var(--muted)"}">預算 $${fmt(b)}<br>${tot>b?"超支 $"+fmt(tot-b):"已用 "+Math.round(tot/b*100)+"%"}</div>`:""}</div>
+      ${b?`<div class="bar"><i class="${tot>b?"over":""}" style="width:${Math.min(100,tot/b*100)}%"></i></div>`:""}
+    </div>
+    <div class="card stack"><div style="font-size:13px;color:var(--muted)">分類</div>
+      ${rows.length?rows.map(([c,v])=>`<div class="crow"><span>${c}</span><span class="bar"><i style="width:${v/max*100}%;background:${catColor(c)}"></i></span><span class="num">$${fmt(v)}<small>${Math.round(v/tot*100)}%</small></span></div>`).join(""):`<div class="empty" style="padding:16px">這個月還沒有紀錄</div>`}
+    </div>
+    <div class="card stack"><div style="font-size:13px;color:var(--muted)">每日消費</div>${svg}</div>
+    <button class="ghost" id="exportBtn">匯出本月 Excel（CSV）</button>
+    <div class="card backup">
+      <div style="font-size:13px;color:var(--muted)">資料備份</div>
+      <div class="note" style="text-align:left">${(()=>{const lb=local.get("lastBackup","");if(!lb)return "還沒備份過。資料只存在這支手機，建議每月備份一次。";const days=Math.round((new Date(today())-new Date(lb))/864e5);return `上次備份：${lb}${days>=30?`（已經 ${days} 天，該備份囉）`:""}`})()}</div>
+      <div class="two"><button class="ghost" id="backupBtn">備份資料</button><button class="ghost" id="restoreBtn">還原備份</button></div>
+      <input type="file" id="restoreIn" accept=".json,application/json" hidden>
+    </div>
+  </div>`;
+}
+
+/* ---------- 彈窗 ---------- */
+function sheet(html,bind){
+  const m=document.createElement("div");m.className="mask";m.innerHTML=`<div class="sheet" role="dialog">${html}</div>`;
+  m.addEventListener("click",e=>{if(e.target===m)m.remove()});document.body.appendChild(m);bind(m,()=>m.remove());
+}
+function budgetSheet(){
+  sheet(`<h2>每月預算</h2><label class="pill"><span>$</span><input id="bIn" class="big-in" inputmode="numeric" value="${S.profile.budget||""}" placeholder="例如 15000"></label>
+    <div class="note">每記一筆，會從當月預算扣掉</div>
+    <div class="two"><button class="ghost" data-x>取消</button><button class="save" data-ok>儲存</button></div>`,(m,close)=>{
+    m.querySelector("[data-x]").onclick=close;
+    m.querySelector("[data-ok]").onclick=async()=>{const v=parseInt(m.querySelector("#bIn").value.replace(/\D/g,""))||0;close();await store.setProfile({...S.profile,budget:v});toast("預算已更新")};
+    m.querySelector("#bIn").focus();
+  });
+}
+function missSheet(s){
+  sheet(`<h2>${dayLabel(s)}</h2><div class="two"><button class="ghost" data-no>這天沒花錢</button><button class="save" data-fill>補記這天</button></div>`,(m,close)=>{
+    m.querySelector("[data-fill]").onclick=()=>{close();S.draft.date=s;render()};
+    m.querySelector("[data-no]").onclick=async()=>{close();await store.setProfile({...S.profile,noSpend:[...(S.profile.noSpend||[]).filter(x=>x>=dstr(new Date(Date.now()-40*864e5))),s]})};
+  });
+}
+function editSheet(id){
+  const e=S.entries.find(x=>x.id===id);if(!e)return;let cat=e.cat,pay=e.pay;
+  sheet(`<h2>修改紀錄</h2>
+    <label class="pill"><span>$</span><input id="eAmt" class="big-in" inputmode="numeric" value="${e.amount}"></label>
+    <div class="cats">${CATS.map(([c,v])=>`<button class="cat" data-ec="${c}" aria-pressed="${c===cat}"><i style="background:var(${v})"></i>${c}</button>`).join("")}</div>
+    <div class="seg">${PAYS.map(p=>`<button data-ep="${p}" aria-pressed="${p===pay}">${p}</button>`).join("")}</div>
+    <div class="meta"><label class="pill"><input type="date" id="eDate" value="${e.date}" max="${today()}"></label><label class="pill"><input id="eNote" value="${esc(e.note||"")}" placeholder="備註" maxlength="40"></label></div>
+    <div class="two"><button class="ghost danger" data-del>刪除</button><button class="save" data-ok>儲存</button></div>`,(m,close)=>{
+    m.querySelectorAll("[data-ec]").forEach(b=>b.onclick=()=>{cat=b.dataset.ec;m.querySelectorAll("[data-ec]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+    m.querySelectorAll("[data-ep]").forEach(b=>b.onclick=()=>{pay=b.dataset.ep;m.querySelectorAll("[data-ep]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+    const del=m.querySelector("[data-del]");
+    del.onclick=async()=>{if(del.dataset.sure){close();await store.del(id);toast("已刪除")}else{del.dataset.sure=1;del.textContent="確定刪除？"}};
+    m.querySelector("[data-ok]").onclick=async()=>{
+      const amt=parseInt(m.querySelector("#eAmt").value.replace(/\D/g,""))||0;if(!amt)return toast("金額要大於 0");
+      const date=m.querySelector("#eDate").value||e.date;
+      const {id:_,...rest}=e;close();
+      await store.save(id,{...rest,amount:amt,cat,pay,date,ym:ymOf(date),note:m.querySelector("#eNote").value.trim()});toast("已更新");
+    };
+  });
+}
+let tt;function toast(t){document.querySelector(".toast")?.remove();const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.appendChild(d);clearTimeout(tt);tt=setTimeout(()=>d.remove(),1800)}
+
+/* ---------- 操作 ---------- */
+document.addEventListener("click",async ev=>{
+  const t=ev.target.closest("button");if(!t||t.closest(".sheet"))return;
+  const d=S.draft;
+  if(!store&&(t.dataset.mon||t.dataset.miss||t.dataset.edit||t.id==="saveBtn"||t.id==="budgetBtn"))return toast("讀取中，請稍候");
+  if(t.dataset.tab){S.tab=t.dataset.tab;if(S.tab==="add"&&S.ym!==ymOf(today())){S.ym=ymOf(today());store.watchMonth(S.ym)}render();window.scrollTo(0,0);return}
+  if(t.dataset.k){const k=t.dataset.k;if(k==="⌫")d.amt=d.amt.slice(0,-1);else if((d.amt+k).replace(/^0+/,"").length<=7)d.amt=(d.amt+k).replace(/^0+/,"");
+    $("#amt").textContent=d.amt?fmt(+d.amt):"0";$("#amt").classList.toggle("ph",!d.amt);$("#saveBtn").disabled=!(+d.amt>0);return}
+  if(t.dataset.cat){d.cat=t.dataset.cat;document.querySelectorAll("[data-cat]").forEach(b=>b.setAttribute("aria-pressed",b===t));return}
+  if(t.dataset.pay){d.pay=t.dataset.pay;document.querySelectorAll("[data-pay]").forEach(b=>b.setAttribute("aria-pressed",b===t));return}
+  if(t.dataset.miss)return missSheet(t.dataset.miss);
+  if(t.dataset.edit)return editSheet(t.dataset.edit);
+  if(t.dataset.mon){const [y,m]=S.ym.split("-").map(Number);const nd=new Date(y,m-1+(+t.dataset.mon),1);const ym=`${nd.getFullYear()}-${pad2(nd.getMonth()+1)}`;if(ym>ymOf(today()))return;S.ym=ym;S.loading=true;render();store.watchMonth(ym);return}
+  if(t.id==="budgetBtn")return budgetSheet();
+  if(t.id==="saveBtn"){
+    const amt=+d.amt;if(!amt)return;
+    const e={amount:amt,cat:d.cat,pay:d.pay,date:d.date,ym:ymOf(d.date),note:d.note.trim(),ts:Date.now()};
+    const msg=`已記一筆 ${d.cat} $${fmt(amt)}`;
+    S.draft={...d,amt:"",note:"",date:today()};render();
+    try{await store.add(e);toast(msg)}catch(err){toast(err?.code==="quota_exceeded"?"儲存空間已滿":"沒有存成功，請再試一次");S.draft.amt=String(amt)}
+    return;
+  }
+  if(t.id==="exportBtn")return exportCsv();
+});
+document.addEventListener("change",ev=>{
+  if(ev.target.id==="dDate"){S.draft.date=ev.target.value||today();render()}
+});
+document.addEventListener("input",ev=>{if(ev.target.id==="dNote")S.draft.note=ev.target.value});
+
+async function exportCsv(){
+  if(!S.entries.length)return toast("這個月沒有資料可匯出");
+  const rows=[["日期","分類","付款方式","金額","備註"],...S.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.date,e.cat,e.pay,e.amount,e.note||""])];
+  const csv="﻿"+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+  saveFile(`記帳_${S.ym}.csv`,csv,"text/csv");
+}
+function saveFile(name,text,type){
+  const url=URL.createObjectURL(new Blob([text],{type:type+";charset=utf-8"}));
+  const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+function backup(){
+  saveFile(`小錢包備份_${today()}.json`,JSON.stringify(store.dump()),"application/json");
+  local.set("lastBackup",today());toast("已產生備份檔，請存到雲端硬碟或傳給自己");render();
+}
+function restoreFile(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    let data;try{data=JSON.parse(r.result)}catch(e){return toast("這不是小錢包的備份檔")}
+    if(data?.app!=="et-wallet"||!Array.isArray(data.entries))return toast("這不是小錢包的備份檔");
+    sheet(`<h2>還原備份</h2><div class="note" style="text-align:left;line-height:1.8">備份日期：${esc((data.exportedAt||"").slice(0,10))}，共 ${data.entries.length} 筆。<br>還原後，手機上現有的紀錄會被這份備份<b>取代</b>。</div>
+      <div class="two"><button class="ghost" data-x>取消</button><button class="save" data-ok>確定還原</button></div>`,(m,close)=>{
+      m.querySelector("[data-x]").onclick=close;
+      m.querySelector("[data-ok]").onclick=()=>{close();store.restore(data);toast(`已還原 ${data.entries.length} 筆`)};
+    });
+  };
+  r.readAsText(file);
+}
+document.addEventListener("click",ev=>{
+  const t=ev.target.closest("button");if(!t)return;
+  if(t.id==="backupBtn")backup();
+  if(t.id==="restoreBtn")$("#restoreIn").click();
+});
+document.addEventListener("change",ev=>{if(ev.target.id==="restoreIn"&&ev.target.files[0]){restoreFile(ev.target.files[0]);ev.target.value=""}});
+
+render();boot();
+if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script>
+</body>
+</html>
