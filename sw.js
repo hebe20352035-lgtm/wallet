@@ -1,6 +1,6 @@
 // 小錢包離線快取：沒有網路時也能打開 APP 記帳
-const CACHE = "et-wallet-v1";
-const FILES = ["./", "index.html", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png"];
+const CACHE = "et-wallet-v2";
+const FILES = ["./", "index.html", "manifest.json?v=2", "icon-180.png?v=2", "icon-192.png?v=2", "icon-512.png?v=2"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
