@@ -20,7 +20,7 @@
 :root{
   --bg:#1B181A; --surface:#252023; --pink:#E8B4BC; --pink-soft:#3A2B31; --rose:#E3A3AD;
   --ink:#F3E9EA; --muted:#A3959A; --line:#363035; --over:#F08C8C;
-  --c1:#F2C6C2; --c2:#E9D3B8; --c3:#C9DCCF; --c4:#D3D3E8; --c5:#EBC9DD; --c6:#CFC6C0;
+  --c1:#F4978E; --c2:#F6C85F; --c3:#7DD3A8; --c4:#7FB7F5; --c5:#C79BF2; --c6:#B5ADA8;
   --f-num:"Nunito","Noto Sans TC",system-ui,sans-serif;
   --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
   --r:18px; color-scheme:dark;
@@ -64,7 +64,7 @@ header .sub:empty{display:none}
 input[type=date]{-webkit-appearance:none;appearance:none;min-height:20px}
 .cats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .cat{display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 6px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-size:15px}
-.cat i{width:9px;height:9px;border-radius:50%}
+.cat i{width:11px;height:11px;border-radius:50%;flex:none}
 .cat[aria-pressed=true]{background:var(--pink-soft);border-color:var(--rose);color:var(--rose);font-weight:500}
 .seg{display:flex;background:var(--pink-soft);border-radius:12px;padding:3px}
 .seg button{flex:1;padding:7px;border-radius:10px;font-size:14px;color:var(--muted)}
@@ -85,7 +85,7 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-height:20px}
 .list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .item{display:flex;align-items:center;gap:12px;width:100%;padding:13px 14px;text-align:left;border-top:1px solid var(--line)}
 .item:first-child{border-top:0}
-.item i{width:10px;height:10px;border-radius:50%;flex:none}
+.item i{width:12px;height:12px;border-radius:50%;flex:none}
 .item .t{flex:1;min-width:0}
 .item .t div{font-size:15px}
 .item .t small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -102,13 +102,13 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-height:20px}
 .clist{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .clist div{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--line)}
 .clist div:first-child{border-top:0}
-.clist i{width:10px;height:10px;border-radius:50%;flex:none}
+.clist i{width:12px;height:12px;border-radius:50%;flex:none}
 .clist span{flex:1;min-width:0}
 .clist button{font-size:13px;color:var(--muted);padding:4px 8px;border-radius:8px}
 .clist button.sure{color:var(--over)}
 .sw{display:flex;flex-wrap:wrap;gap:10px}
 .sw button{width:30px;height:30px;border-radius:50%;border:2px solid transparent}
-.sw button[aria-pressed=true]{border-color:var(--ink)}
+.sw button[aria-pressed=true]{border-color:var(--bg);box-shadow:0 0 0 2px var(--ink)}
 .crow small{color:var(--muted);font-size:12px;margin-left:4px}
 .stack{display:flex;flex-direction:column;gap:12px}
 svg text{fill:var(--muted);font-family:var(--f-num);font-size:10px}
@@ -169,9 +169,11 @@ nav button[aria-current=true]{color:var(--rose)}
 
 <script>
 const DEFAULT_CATS=[["餐飲","var(--c1)"],["飲料","var(--c5)"],["交通費","var(--c4)"],["日用品","var(--c3)"],["娛樂","var(--c2)"],["其他","var(--c6)"]];
-const SWATCH=["#F2C6C2","#EBC9DD","#D8C3F0","#D3D3E8","#B8D8E8","#C9DCCF","#A9D3C6","#F5E3A8","#E9D3B8","#CFC6C0"];
+const SWATCH=["#F4978E","#F28DB2","#C79BF2","#7FB7F5","#5CC8C8","#7DD3A8","#B8D86B","#F6C85F","#F5A962","#B5ADA8"];
 /* 分類清單存在 profile.cats，沒有自訂過就用預設 */
-const cats=()=>Array.isArray(S.profile.cats)&&S.profile.cats.length?S.profile.cats:DEFAULT_CATS;
+/* 舊版淡色色票自動換成新的對應顏色 */
+const OLD_SWATCH=["#F2C6C2","#EBC9DD","#D8C3F0","#D3D3E8","#B8D8E8","#C9DCCF","#A9D3C6","#F5E3A8","#E9D3B8","#CFC6C0"];
+const cats=()=>Array.isArray(S.profile.cats)&&S.profile.cats.length?S.profile.cats.map(([n,c])=>[n,OLD_SWATCH.includes(c)?SWATCH[OLD_SWATCH.indexOf(c)]:c]):DEFAULT_CATS;
 const PAYS=["信用卡","現金","其他"];
 const catColor=c=>(cats().find(x=>x[0]===c)||[c,"var(--c6)"])[1];
 const $=s=>document.querySelector(s);
