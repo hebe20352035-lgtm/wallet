@@ -1,5 +1,5 @@
 // 小錢包離線快取：沒有網路時也能打開 APP 記帳
-const CACHE = "et-wallet-v2";
+const CACHE = "et-wallet-v3";
 const FILES = ["./", "index.html", "manifest.json?v=2", "icon-180.png?v=2", "icon-192.png?v=2", "icon-512.png?v=2"];
 
 self.addEventListener("install", e => {
@@ -12,11 +12,12 @@ self.addEventListener("activate", e => {
   self.clients.claim();
 });
 
-// 先抓網路上的最新版，抓不到才用快取
+// 先抓網路上的最新版（略過瀏覽器的 10 分鐘暫存），抓不到才用快取
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  const sameOrigin = new URL(e.request.url).origin === location.origin;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, sameOrigin ? { cache: "no-cache" } : undefined)
       .then(res => {
         if (res.ok && new URL(e.request.url).origin === location.origin) {
           const copy = res.clone();
