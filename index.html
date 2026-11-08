@@ -145,6 +145,14 @@ nav button[aria-current=true]{color:var(--rose)}
 .ltotal{border-top:1px solid var(--rose);font-weight:700}
 .ltotal b{font-size:20px;color:var(--rose)}
 .tag{margin-left:6px;font-size:11px;padding:1px 7px;border-radius:99px;background:var(--pink-soft);color:var(--rose)}
+.tag.sub{margin-left:0}
+.subsum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.subsum div{background:var(--pink-soft);border-radius:12px;padding:9px 10px;min-width:0}
+.subsum small{display:block;font-size:12px;color:var(--muted)}
+.subsum b{font-size:17px}
+.subrow{width:100%;text-align:left}
+.subrow i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px}
+.subrow.off{opacity:.5}
 .backup .two button{font-size:14px}
 </style>
 </head>
@@ -253,13 +261,37 @@ function localStore(){
     async del(id){all=all.filter(x=>x.id!==id);local.set("entries",all);this.refresh()},
     async setProfile(p){S.profile=p;local.set("profile",p);render()},
     dump(){return{app:"et-wallet",version:1,exportedAt:new Date().toISOString(),profile:S.profile,entries:all}},
-    restore(data){all=data.entries;local.set("entries",all);S.profile={budget:0,noSpend:[],startDate:today(),...data.profile};local.set("profile",S.profile);this.refresh()},
-    init(){const p=local.get("profile",null);if(p)S.profile=p;else local.set("profile",S.profile);this.refresh()}
+    restore(data){all=data.entries;local.set("entries",all);S.profile={budget:0,noSpend:[],startDate:today(),...data.profile};local.set("profile",S.profile);this.genSubs();this.refresh()},
+    /* 把「下次扣款日」已到的訂閱自動記一筆，並把下次扣款日往後推；沒打開 APP 的日子也會補上 */
+    genSubs(){
+      const subs=S.profile.subs||[];if(!subs.length)return 0;let n=0;
+      const next=subs.map(sb=>{
+        if(!sb.active)return sb;let d=sb.next,g=0;
+        while(d<=today()&&g++<400){
+          if(d>=RECORD_START){all.push({id:`s${sb.id}_${d}`,amount:+sb.amount,cat:sb.cat,pay:sb.pay,date:d,ym:ymOf(d),note:sb.name,src:"sub",subId:sb.id,ts:Date.now()+n});n++}
+          d=advanceSub(sb,d);
+        }
+        return d===sb.next?sb:{...sb,next:d};
+      });
+      if(n||next.some((x,i)=>x!==subs[i])){S.profile={...S.profile,subs:next};local.set("profile",S.profile);local.set("entries",all)}
+      return n;
+    },
+    init(){const p=local.get("profile",null);if(p)S.profile=p;else local.set("profile",S.profile);const n=this.genSubs();this.refresh();if(n)setTimeout(()=>toast(`已自動記上 ${n} 筆訂閱扣款`),300)}
   };
 }
 /* 請瀏覽器把資料標記為「持續保存」，降低被系統自動清除的機率 */
 try{navigator.storage?.persist?.()}catch(e){}
 function boot(){store=localStore();store.init()}
+/* 隔天從背景切回 APP 時，也檢查一次訂閱扣款 */
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&store){const n=store.genSubs();if(n){store.refresh();toast(`已自動記上 ${n} 筆訂閱扣款`)}}});
+/* ---------- 訂閱：日期推算 ---------- */
+const dim=(y,m)=>new Date(y,m,0).getDate();
+function advanceSub(sb,d){
+  let [y,m]=d.split("-").map(Number);
+  if(sb.cycle==="y")y++;else{m++;if(m>12){m=1;y++}}
+  return `${y}-${pad2(m)}-${pad2(Math.min(+sb.day,dim(y,m)))}`;
+}
+const subMonthly=sb=>sb.cycle==="y"?0:+sb.amount;
 
 /* ---------- 計算 ---------- */
 const sum=a=>a.reduce((t,e)=>t+(+e.amount||0),0);
@@ -325,7 +357,7 @@ function renderList(){
   const days=Object.keys(by);
   $("#view").innerHTML=`<div class="stack">${periodBar()}
     ${S.loading?`<div class="empty">讀取中…</div>`:days.length?days.map(dy=>`<div class="day"><h3><span>${dayLabel(dy)}</span><span class="num">$${fmt(sum(by[dy]))}</span></h3>
-      <div class="list">${by[dy].map(e=>`<button class="item" data-edit="${e.id}"><i style="background:${catColor(e.cat)}"></i><span class="t"><div>${esc(e.cat)}</div><small>${esc(e.pay)}${e.note?" · "+esc(e.note):""}</small></span><b class="num">$${fmt(e.amount)}</b></button>`).join("")}</div></div>`).join("")
+      <div class="list">${by[dy].map(e=>`<button class="item" data-edit="${e.id}"><i style="background:${catColor(e.cat)}"></i><span class="t"><div>${esc(e.cat)}</div><small>${e.src==="sub"?`<span class="tag sub">訂閱</span> `:""}${esc(e.pay)}${e.note?" · "+esc(e.note):""}</small></span><b class="num">$${fmt(e.amount)}</b></button>`).join("")}</div></div>`).join("")
     :`<div class="empty">這期還沒有紀錄<br>到「記帳」輸入金額、點分類就能記下第一筆</div>`}
   </div>`;
 }
@@ -345,6 +377,17 @@ function leftoverCard(){
     ${shown.length?`<div class="llist">${shown.map(line).join("")}</div>
       <div class="lrow ltotal"><div>合計（已結束 ${done.length} 期）</div><b class="num ${total<0?"neg":""}">${total<0?"−":""}$${fmt(Math.abs(total))}</b></div>`
     :`<div class="note" style="text-align:left">設定預算後，從 ${md(BUDGET_START)} 發薪日開始，每期結束會在這裡列出剩下多少錢和合計。</div>`}
+  </div>`;
+}
+function subsCard(){
+  const subs=(S.profile.subs||[]).slice().sort((a,b)=>(b.active-a.active)||a.next.localeCompare(b.next));
+  const on=subs.filter(x=>x.active),mon=on.reduce((t,x)=>t+subMonthly(x),0),yr=on.filter(x=>x.cycle==="y").reduce((t,x)=>t+(+x.amount),0);
+  const inPeriod=sum(S.entries.filter(e=>e.src==="sub"));
+  return `<div class="card stack"><div style="font-size:13px;color:var(--muted)">固定訂閱</div>
+    ${subs.length?`<div class="subsum"><div><small>每月固定</small><b class="num">$${fmt(mon)}</b></div><div><small>年繳合計</small><b class="num">$${fmt(yr)}</b></div><div><small>這期已扣</small><b class="num">$${fmt(inPeriod)}</b></div></div>
+    <div class="llist">${subs.map(x=>`<button class="lrow subrow ${x.active?"":"off"}" data-sub="${x.id}"><div><div><i style="background:${catColor(x.cat)}"></i>${esc(x.name)}<span class="tag">${x.cycle==="y"?"年繳":"月繳"}</span>${x.active?"":`<span class="tag">已停用</span>`}</div><small>${x.active?`下次扣款 ${md(x.next)}`:"不再自動記帳"} · ${esc(x.cat)} · ${esc(x.pay)}</small></div><b class="num">$${fmt(x.amount)}</b></button>`).join("")}</div>`
+    :`<div class="note" style="text-align:left">把每月、每年固定扣款的訂閱設定在這裡，到了扣款日會自動記一筆，並從當期預算扣掉。</div>`}
+    <button class="ghost" id="subAdd">＋ 新增訂閱</button>
   </div>`;
 }
 function renderStats(){
@@ -370,6 +413,7 @@ function renderStats(){
       ${rows.length?rows.map(([c,v])=>`<div class="crow"><span class="cn">${esc(c)}</span><span class="bar"><i style="width:${v/max*100}%;background:${catColor(c)}"></i></span><span class="num">$${fmt(v)}<small>${Math.round(v/tot*100)}%</small></span></div>`).join(""):`<div class="empty" style="padding:16px">這期還沒有紀錄</div>`}
     </div>
     ${leftoverCard()}
+    ${subsCard()}
     <div class="card stack"><div style="font-size:13px;color:var(--muted)">每日消費</div>${svg}</div>
     <button class="ghost" id="exportBtn">匯出這期 Excel（CSV）</button>
     <div class="card backup">
@@ -495,6 +539,56 @@ function missSheet(s){
     m.querySelector("[data-no]").onclick=async()=>{close();await store.setProfile({...S.profile,noSpend:[...(S.profile.noSpend||[]).filter(x=>x>=dstr(new Date(Date.now()-40*864e5))),s]})};
   });
 }
+function nextFromDay(cycle,day,month){
+  const t=today(),[y,m]=t.split("-").map(Number);
+  let d=cycle==="y"?`${y}-${pad2(month)}-${pad2(Math.min(day,dim(y,month)))}`:`${y}-${pad2(m)}-${pad2(Math.min(day,dim(y,m)))}`;
+  if(d<t)d=advanceSub({cycle,day},d);return d;
+}
+async function ensureSubCat(){
+  if(cats().some(x=>x[0]==="訂閱"))return;
+  const color=SWATCH.find(c=>!cats().some(x=>x[1]===c))||SWATCH[4];
+  await store.setProfile({...S.profile,cats:[...cats(),["訂閱",color]]});
+}
+async function subSheet(id){
+  const old=(S.profile.subs||[]).find(x=>x.id===id);
+  if(!old)await ensureSubCat();
+  const f=old?{...old}:{name:"",amount:"",cycle:"m",next:nextFromDay("m",+today().slice(8),1),cat:"訂閱",pay:"信用卡",active:true};
+  sheet(`<h2>${old?"修改訂閱":"新增訂閱"}</h2>
+    <label class="pill"><input id="sName" placeholder="名稱，例如：Netflix" maxlength="16" value="${esc(f.name)}"></label>
+    <label class="pill"><span>$</span><input id="sAmt" class="big-in" inputmode="numeric" placeholder="金額" value="${f.amount}"></label>
+    <div class="seg" id="sCycle">${[["m","月繳"],["y","年繳"]].map(([k,t])=>`<button data-cy="${k}" aria-pressed="${f.cycle===k}">${t}</button>`).join("")}</div>
+    <div style="font-size:13px;color:var(--muted)">${old?"下次扣款日":"第一次扣款日"}</div>
+    <label class="pill"><input type="date" id="sNext" value="${f.next}" min="${RECORD_START}"></label>
+    <div class="note" id="sHint" style="text-align:left"></div>
+    <div class="cats">${[...cats().map(x=>x[0]),...(cats().some(x=>x[0]===f.cat)?[]:[f.cat])].map(c=>`<button class="cat" data-sc="${esc(c)}" aria-pressed="${c===f.cat}"><i style="background:${catColor(c)}"></i>${esc(c)}</button>`).join("")}</div>
+    <div class="seg">${PAYS.map(p=>`<button data-sp="${p}" aria-pressed="${p===f.pay}">${p}</button>`).join("")}</div>
+    ${old?`<div class="two"><button class="ghost" data-stop>${f.active?"停用":"重新啟用"}</button><button class="ghost danger" data-del>刪除</button></div>`:""}
+    <div class="two"><button class="ghost" data-x>取消</button><button class="save" data-ok>儲存</button></div>`,(m,close)=>{
+    const hint=()=>{const d=m.querySelector("#sNext").value;if(!d){m.querySelector("#sHint").textContent="";return}
+      const dd=new Date(d+"T00:00");m.querySelector("#sHint").textContent=(f.cycle==="y"?`每年 ${dd.getMonth()+1}/${dd.getDate()} 扣款`:`每月 ${dd.getDate()} 號扣款${dd.getDate()>28?"（月份沒有這天時，改在月底）":""}`)+(d<=today()?"。儲存後會先補記到今天為止的扣款":"");};
+    hint();m.querySelector("#sNext").addEventListener("change",hint);
+    m.querySelectorAll("[data-cy]").forEach(b=>b.onclick=()=>{f.cycle=b.dataset.cy;m.querySelectorAll("[data-cy]").forEach(x=>x.setAttribute("aria-pressed",x===b));hint()});
+    m.querySelectorAll("[data-sc]").forEach(b=>b.onclick=()=>{f.cat=b.dataset.sc;m.querySelectorAll("[data-sc]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+    m.querySelectorAll("[data-sp]").forEach(b=>b.onclick=()=>{f.pay=b.dataset.sp;m.querySelectorAll("[data-sp]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+    m.querySelector("[data-x]").onclick=close;
+    const saveSubs=async(list,msg)=>{close();await store.setProfile({...S.profile,subs:list});const n=store.genSubs();store.refresh();toast(n?`${msg}，已補記 ${n} 筆扣款`:msg)};
+    const stop=m.querySelector("[data-stop]");
+    if(stop)stop.onclick=()=>{
+      if(f.active)return saveSubs(S.profile.subs.map(x=>x.id===id?{...x,active:false}:x),"已停用，之前的紀錄會保留");
+      const nx=nextFromDay(old.cycle,+old.day,+old.next.slice(5,7));
+      saveSubs(S.profile.subs.map(x=>x.id===id?{...x,active:true,next:nx}:x),`已重新啟用，下次扣款 ${md(nx)}`);
+    };
+    const del=m.querySelector("[data-del]");
+    if(del)del.onclick=()=>{if(!del.dataset.sure){del.dataset.sure=1;del.textContent="確定刪除？";return}saveSubs(S.profile.subs.filter(x=>x.id!==id),"已刪除訂閱，之前的紀錄會保留")};
+    m.querySelector("[data-ok]").onclick=()=>{
+      const name=m.querySelector("#sName").value.trim(),amt=parseInt(m.querySelector("#sAmt").value.replace(/\D/g,""))||0,next=m.querySelector("#sNext").value;
+      if(!name)return toast("請輸入名稱");if(!amt)return toast("金額要大於 0");if(!next)return toast("請選扣款日");
+      if(next<RECORD_START)return toast(`扣款日不能早於 ${md(RECORD_START)}`);
+      const sb={...f,name,amount:amt,next,day:+next.slice(8),id:old?old.id:"u"+Date.now().toString(36)};
+      saveSubs(old?S.profile.subs.map(x=>x.id===id?sb:x):[...(S.profile.subs||[]),sb],old?"已更新訂閱":`已新增「${name}」`);
+    };
+  });
+}
 function editSheet(id){
   const e=S.entries.find(x=>x.id===id);if(!e)return;let cat=e.cat,pay=e.pay;
   sheet(`<h2>修改紀錄</h2>
@@ -531,6 +625,8 @@ document.addEventListener("click",async ev=>{
   if(t.dataset.edit)return editSheet(t.dataset.edit);
   if(t.dataset.mon){const P=periodOf(S.pk);const np=+t.dataset.mon<0?periodOf(addDays(P.start,-1)):periodOf(addDays(P.end,1));if(np.start>curPeriod().start)return;S.pk=np.start;store.refresh();return}
   if(t.id==="budgetBtn")return budgetSheet();
+  if(t.id==="subAdd")return subSheet();
+  if(t.dataset.sub)return subSheet(t.dataset.sub);
   if(t.id==="catBtn")return catSheet();
   if(t.id==="saveBtn"){
     const amt=+d.amt;if(!amt)return;
