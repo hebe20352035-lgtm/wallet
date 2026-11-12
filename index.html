@@ -286,14 +286,14 @@ function localStore(){
       if(n||next.some((x,i)=>x!==subs[i])){S.profile={...S.profile,subs:next};local.set("profile",S.profile);local.set("entries",all)}
       return n;
     },
-    init(){const p=local.get("profile",null);if(p)S.profile=p;else local.set("profile",S.profile);const n=this.genSubs();this.refresh();if(n)setTimeout(()=>toast(`已自動記上 ${n} 筆訂閱扣款`),300)}
+    init(){const p=local.get("profile",null);if(p)S.profile=p;else local.set("profile",S.profile);const n=this.genSubs();this.refresh();if(n)setTimeout(()=>toast(`已自動記上 ${n} 筆固定支出`),300)}
   };
 }
 /* 請瀏覽器把資料標記為「持續保存」，降低被系統自動清除的機率 */
 try{navigator.storage?.persist?.()}catch(e){}
 function boot(){store=localStore();store.init()}
 /* 隔天從背景切回 APP 時，也檢查一次訂閱扣款 */
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&store){const n=store.genSubs();if(n){store.refresh();toast(`已自動記上 ${n} 筆訂閱扣款`)}}});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&store){const n=store.genSubs();if(n){store.refresh();toast(`已自動記上 ${n} 筆固定支出`)}}});
 /* ---------- 訂閱：日期推算 ---------- */
 const dim=(y,m)=>new Date(y,m,0).getDate();
 function advanceSub(sb,d){
@@ -373,7 +373,7 @@ function renderList(){
   const days=Object.keys(by);
   $("#view").innerHTML=`<div class="stack">${periodBar()}
     ${S.loading?`<div class="empty">讀取中…</div>`:days.length?days.map(dy=>`<div class="day"><h3><span>${dayLabel(dy)}</span><span class="num">${spend(by[dy])||!back(by[dy])?`$${fmt(spend(by[dy]))}`:""}${back(by[dy])?`<span class="inc">${spend(by[dy])?" · ":""}+$${fmt(back(by[dy]))}</span>`:""}</span></h3>
-      <div class="list">${by[dy].map(e=>`<button class="item" data-edit="${e.id}"><i style="background:${catColor(e.cat)}"></i><span class="t"><div>${esc(e.cat)}</div><small>${e.src==="sub"?`<span class="tag sub">訂閱</span> `:""}${esc(e.pay)}${e.note?" · "+esc(e.note):""}</small></span><b class="num ${isIn(e.cat)?"inc":""}">${isIn(e.cat)?"+":""}$${fmt(e.amount)}</b></button>`).join("")}</div></div>`).join("")
+      <div class="list">${by[dy].map(e=>`<button class="item" data-edit="${e.id}"><i style="background:${catColor(e.cat)}"></i><span class="t"><div>${esc(e.cat)}</div><small>${e.src==="sub"?`<span class="tag sub">固定</span> `:""}${esc(e.pay)}${e.note?" · "+esc(e.note):""}</small></span><b class="num ${isIn(e.cat)?"inc":""}">${isIn(e.cat)?"+":""}$${fmt(e.amount)}</b></button>`).join("")}</div></div>`).join("")
     :`<div class="empty">這期還沒有紀錄<br>到「記帳」輸入金額、點分類就能記下第一筆</div>`}
   </div>`;
 }
@@ -399,11 +399,11 @@ function subsCard(){
   const subs=(S.profile.subs||[]).slice().sort((a,b)=>(b.active-a.active)||a.next.localeCompare(b.next));
   const on=subs.filter(x=>x.active),mon=on.reduce((t,x)=>t+subMonthly(x),0),yr=on.filter(x=>x.cycle==="y").reduce((t,x)=>t+(+x.amount),0);
   const inPeriod=sum(S.entries.filter(e=>e.src==="sub"));
-  return `<div class="card stack"><div style="font-size:13px;color:var(--muted)">固定訂閱</div>
+  return `<div class="card stack"><div style="font-size:13px;color:var(--muted)">固定支出（房租、訂閱）</div>
     ${subs.length?`<div class="subsum"><div><small>每月固定</small><b class="num">$${fmt(mon)}</b></div><div><small>年繳合計</small><b class="num">$${fmt(yr)}</b></div><div><small>這期已扣</small><b class="num">$${fmt(inPeriod)}</b></div></div>
     <div class="llist">${subs.map(x=>`<button class="lrow subrow ${x.active?"":"off"}" data-sub="${x.id}"><div><div><i style="background:${catColor(x.cat)}"></i>${esc(x.name)}<span class="tag">${x.cycle==="y"?"年繳":"月繳"}</span>${x.active?"":`<span class="tag">已停用</span>`}</div><small>${x.active?`下次扣款 ${md(x.next)}`:"不再自動記帳"} · ${esc(x.cat)} · ${esc(x.pay)}</small></div><b class="num">$${fmt(x.amount)}</b></button>`).join("")}</div>`
-    :`<div class="note" style="text-align:left">把每月、每年固定扣款的訂閱設定在這裡，到了扣款日會自動記一筆，並從當期預算扣掉。</div>`}
-    <button class="ghost" id="subAdd">＋ 新增訂閱</button>
+    :`<div class="note" style="text-align:left">把房租、訂閱這類每月或每年固定要付的錢設定在這裡，到了扣款日會自動記一筆，並從當期預算扣掉。</div>`}
+    <button class="ghost" id="subAdd">＋ 新增固定支出</button>
   </div>`;
 }
 function renderStats(){
@@ -576,8 +576,8 @@ async function subSheet(id){
   const old=(S.profile.subs||[]).find(x=>x.id===id);
   if(!old)await ensureSubCat();
   const f=old?{...old}:{name:"",amount:"",cycle:"m",next:nextFromDay("m",+today().slice(8),1),cat:"訂閱",pay:"信用卡",active:true};
-  sheet(`<h2>${old?"修改訂閱":"新增訂閱"}</h2>
-    <label class="pill"><input id="sName" placeholder="名稱，例如：Netflix" maxlength="16" value="${esc(f.name)}"></label>
+  sheet(`<h2>${old?"修改固定支出":"新增固定支出"}</h2>
+    <label class="pill"><input id="sName" placeholder="名稱，例如：房租、Netflix" maxlength="16" value="${esc(f.name)}"></label>
     <label class="pill"><span>$</span><input id="sAmt" class="big-in" inputmode="numeric" placeholder="金額" value="${f.amount}"></label>
     <div class="seg" id="sCycle">${[["m","月繳"],["y","年繳"]].map(([k,t])=>`<button data-cy="${k}" aria-pressed="${f.cycle===k}">${t}</button>`).join("")}</div>
     <div style="font-size:13px;color:var(--muted)">${old?"下次扣款日":"第一次扣款日"}</div>
@@ -602,13 +602,13 @@ async function subSheet(id){
       saveSubs(S.profile.subs.map(x=>x.id===id?{...x,active:true,next:nx}:x),`已重新啟用，下次扣款 ${md(nx)}`);
     };
     const del=m.querySelector("[data-del]");
-    if(del)del.onclick=()=>{if(!del.dataset.sure){del.dataset.sure=1;del.textContent="確定刪除？";return}saveSubs(S.profile.subs.filter(x=>x.id!==id),"已刪除訂閱，之前的紀錄會保留")};
+    if(del)del.onclick=()=>{if(!del.dataset.sure){del.dataset.sure=1;del.textContent="確定刪除？";return}saveSubs(S.profile.subs.filter(x=>x.id!==id),"已刪除，之前的紀錄會保留")};
     m.querySelector("[data-ok]").onclick=()=>{
       const name=m.querySelector("#sName").value.trim(),amt=parseInt(m.querySelector("#sAmt").value.replace(/\D/g,""))||0,next=m.querySelector("#sNext").value;
       if(!name)return toast("請輸入名稱");if(!amt)return toast("金額要大於 0");if(!next)return toast("請選扣款日");
       if(next<RECORD_START)return toast(`扣款日不能早於 ${md(RECORD_START)}`);
       const sb={...f,name,amount:amt,next,day:+next.slice(8),id:old?old.id:"u"+Date.now().toString(36)};
-      saveSubs(old?S.profile.subs.map(x=>x.id===id?sb:x):[...(S.profile.subs||[]),sb],old?"已更新訂閱":`已新增「${name}」`);
+      saveSubs(old?S.profile.subs.map(x=>x.id===id?sb:x):[...(S.profile.subs||[]),sb],old?"已更新":`已新增「${name}」`);
     };
   });
 }
